@@ -1,0 +1,15 @@
+{
+  "name": "media-recorder-sample",
+  "version": "1.0.0",
+  "description": "MediaRecorder sample",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "start": "npx parcel src/index.html -d public"
+  },
+  "author": "ryoha000",
+  "license": "ISC",
+  "devDependencies": {
+    "sass": "^1.29.0",
+    "typescript": "^4.0.5"
+  }
+}
