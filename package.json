@@ -8,7 +8,12 @@
   },
   "author": "ryoha000",
   "license": "ISC",
+  "browserslist": [
+    "since 2017-06"
+  ],
   "devDependencies": {
+    "babel-core": "^6.26.3",
+    "babel-preset-env": "^1.7.0",
     "sass": "^1.29.0",
     "typescript": "^4.0.5"
   }

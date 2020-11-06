@@ -1,8 +1,17 @@
 import '../scss/style.scss';
-import add from './add';
+import useRecord from './record'
+import { getMedia, startVideo } from './utils'
 
-const number1 = 400;
-const number2 = 600;
-const total = add(number1, number2);
+const setup = async () => {
+  const stream = await getMedia()
 
-console.log(total);
+  const { startRecord, downloadWebM } = useRecord()
+  const btn = document.getElementById('downloadButton')
+  if (!btn) throw 'button not found'
+  btn.addEventListener('click', downloadWebM)
+
+  startRecord(stream)
+  startVideo(stream)
+}
+
+setup()
