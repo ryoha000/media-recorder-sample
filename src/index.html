@@ -5,12 +5,21 @@
 </head>
 <body>
   <h1>MediaRecorder sample</h1>
-  <div>
-    <video id="video" controls></video>
+  <div class="container">
+    <div class="videoContainer">
+      <h3>video of your device</h3>
+      <video id="mediaVideo" controls autoplay></video>
+    </div>
+    <div class="videoContainer">
+      <h3>video of MediaRecorder demo</h3>
+      <video id="confirmVideo" controls></video>
+    </div>
   </div>
   <div>
-    <button id="downloadButton">download as webm</button>
+    <button id="playInitialVideoButton">play initial webm</button>
+    <button id="showEBMLButton">show webm ebml</button>
   </div>
+  <textarea readonly id="message"></textarea>
   <script src="ts/app.ts"></script>
 </body>
 </html>

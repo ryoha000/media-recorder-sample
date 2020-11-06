@@ -1,5 +1,12 @@
 body {
-  #video {
-    width: 80%;
+  padding: 1rem;
+  .container {
+    display: flex;
+  }
+  .videoContainer {
+    width: 50%;
+  }
+  video {
+    width: 100%;
   }
 }

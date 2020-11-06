@@ -1,0 +1,3 @@
+interface EBMLElementDetail {
+  isEnd?: boolean
+}

@@ -1,0 +1,5 @@
+export const MediaVideoID = 'mediaVideo'
+export const ConfirmVideoID = 'confirmVideo'
+export const MessageTextAreaID = 'message'
+export const PlayInitialVideoButtonID = 'playInitialVideoButton'
+export const ShowEBMLButtonID = 'showEBMLButton'
