@@ -1,4 +1,4 @@
-import { EBMLElementDetail, SimpleBlock } from 'ts-ebml';
+import { SimpleBlock } from 'ts-ebml';
 // @ts-ignore
 import ebmlBlock from 'ebml-block'
 
@@ -32,18 +32,25 @@ export const getDisplayEBML = (data: EBMLElementDetailWithIsEnd[]) => {
 }
 
 export const getDuration = (data: EBMLElementDetailWithIsEnd[]) => {
-  // @ts-ignore
-  const timeScale = data.find(v => v.name === 'TimestampScale')?.value
+  const timeScale = data.find(v => v.name === 'TimecodeScale')?.value
   if (typeof timeScale !== 'number' || !timeScale) {
+    console.error('no time scale')
     return 0
   }
+  let baseTimecode = 0
   let duration = 0
   for (const tag of data) {
+    if (tag.name === 'Timecode') {
+      baseTimecode = tag.value
+    }
     if (tag.name === 'SimpleBlock') {
       // @ts-ignore
       const block: SimpleBlock = ebmlBlock(tag.data)
-      duration += block.timecode * timeScale
+      const t = (baseTimecode + block.timecode) * timeScale
+      if (duration < t) {
+        duration = t
+      }
     }
   }
-  return duration
+  return duration / Math.pow(10, 9)
 }

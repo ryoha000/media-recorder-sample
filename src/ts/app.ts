@@ -11,9 +11,9 @@ const setup = async () => {
 
   addClickFunction([
     { id: PlayInitialVideoButtonID, func: playInitialWebM },
-    { id: ShowEBMLButtonID, func: () => displayEBML },
-    { id: PlayVideoWithBigDurationBUtton, func: () => playWebMWithBigDuration },
-    { id: PlayVideoWithDurationBUtton, func: () => playWebMWithDuration },
+    { id: ShowEBMLButtonID, func: displayEBML },
+    { id: PlayVideoWithBigDurationBUtton, func: playWebMWithBigDuration },
+    { id: PlayVideoWithDurationBUtton, func: playWebMWithDuration },
   ])
 }
 

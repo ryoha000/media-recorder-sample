@@ -5,8 +5,7 @@ import { getDisplayEBML, getDuration } from './ebml'
 
 const useRecord = () => {
   const chunks: Blob[] = []
-  const decoder = new ebml.Decoder();
-
+  
   const startRecord = (stream: MediaStream) => {
     const recorder = new MediaRecorder(stream)
     recorder.start(1000)
@@ -15,26 +14,31 @@ const useRecord = () => {
       chunks.push(e.data)
     }
   }
-  const getNewChunks = () => chunks.concat()
+  const getNewChunks = () => {
+    const res: Blob[] = []
+    for (const blob of chunks) {
+      res.push(new Blob([blob], {type: blob.type}))
+    }
+    return res
+  }
   const playInitialWebM = () => {
     const videloBlob = new Blob(getNewChunks(), { type: 'webm' })
     playVideoByBlob(ConfirmVideoID, videloBlob)
   }
   const playWebMWithBigDuration = () => {
-    console.warn('a')
     const videloBlob = new Blob(getNewChunks(), { type: 'webm' })
     playVideoByBlob(ConfirmVideoID, videloBlob);
     (document.getElementById(ConfirmVideoID) as HTMLVideoElement).currentTime = Infinity
   }
   const getEBML = async () => {
+    const decoder = new ebml.Decoder();
     const videloBlob = new Blob(getNewChunks(), { type: 'webm' })
     const buf = await videloBlob.arrayBuffer()
     return decoder.decode(buf);
   }
   const displayEBML = async () => {
     const data = await getEBML()
-    const str = getDisplayEBML(data)
-    setMessage(str)
+    setMessage(getDisplayEBML(data))
   }
   const playWebMWithDuration = async () => {
     const data = await getEBML()

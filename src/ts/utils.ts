@@ -1,5 +1,4 @@
 import { MessageTextAreaID } from './const'
-import { getDisplayEBML } from './ebml'
 
 export const getMedia = async () => {
   return await navigator.mediaDevices.getUserMedia({ audio: false, video: true })
