@@ -1,8 +1,6 @@
-import { EBMLElementDetail } from 'ts-ebml';
-
-type EBMLElementDetailWithIsEnd = EBMLElementDetail & {
-  isEnd?: boolean
-}
+import { EBMLElementDetail, SimpleBlock } from 'ts-ebml';
+// @ts-ignore
+import ebmlBlock from 'ebml-block'
 
 export const getDisplayEBML = (data: EBMLElementDetailWithIsEnd[]) => {
   let indent = 0
@@ -31,4 +29,21 @@ export const getDisplayEBML = (data: EBMLElementDetailWithIsEnd[]) => {
     }
   }
   return res
+}
+
+export const getDuration = (data: EBMLElementDetailWithIsEnd[]) => {
+  // @ts-ignore
+  const timeScale = data.find(v => v.name === 'TimestampScale')?.value
+  if (typeof timeScale !== 'number' || !timeScale) {
+    return 0
+  }
+  let duration = 0
+  for (const tag of data) {
+    if (tag.name === 'SimpleBlock') {
+      // @ts-ignore
+      const block: SimpleBlock = ebmlBlock(tag.data)
+      duration += block.timecode * timeScale
+    }
+  }
+  return duration
 }
