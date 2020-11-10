@@ -50,3 +50,9 @@ export const setMessage = (text: string) => {
   }
   (element as HTMLInputElement).value = text
 }
+
+export const isLittleEndian = () => {
+  const arr = new Uint16Array([0x1122])
+  const checkArr = new Uint8Array(arr.buffer)
+  return checkArr[0] === 0x22
+}
