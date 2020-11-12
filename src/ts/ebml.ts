@@ -2,7 +2,8 @@ import { SimpleBlock } from 'ts-ebml';
 // @ts-ignore
 import ebmlBlock from 'ebml-block'
 import { EBMLElementDetailWithIsEnd } from '../@types/EBML';
-import { isLittleEndian } from './utils'
+import { checkByteOrder, getSecFromNanoSec, checkLittleEndian } from './utils'
+import { getFloatArrayByNumber, getUintArrayByNumber } from './typeArrayUtils';
 
 export interface DurationInfo {
   info: EBMLElementDetailWithIsEnd
@@ -72,30 +73,13 @@ export const insertDuration = async (blob: Blob, durationInfo: DurationInfo) => 
   const buf = await blob.arrayBuffer()
   const prevArr = new Uint8Array(buf)
 
-  // https://www.matroska.org/technical/elements.html
-  // https://en.wikipedia.org/wiki/Variable-length_quantity
-  const durationTag = new Uint8Array([0x44, 0x89])
-  const durationSize = new Uint8Array([0b10000000])
-  let durationFloatValue: Float32Array | Float64Array
-  // Float64に収まらないのは考えない
-  if (durationInfo.duration < 3.4 * Math.pow(10, 38)) {
-    durationFloatValue = new Float32Array([durationInfo.duration])
-  } else {
-    durationFloatValue = new Float64Array([durationInfo.duration])
-  }
-  durationSize[0] += durationFloatValue.BYTES_PER_ELEMENT
-  const durationValue = new Uint8Array(durationFloatValue.buffer)
-  // byte order が little endian のときはひっくり返す
-  if (isLittleEndian()) {
-    durationValue.reverse()
-  }
+  const duration = getEBMLTagByFloatValue([0x44, 0x89], durationInfo.duration, checkLittleEndian())
 
-  const appendSize = durationTag.length + durationSize.length + durationValue.length
-  const resUint8Array = new Uint8Array(prevArr.length + appendSize)
+  const resUint8Array = new Uint8Array(prevArr.length + duration.length)
   let resIndex = 0
   for (let i = 0; i < prevArr.length; i ++) {
     if (i === durationInfo.info.sizeStart) {
-      const newArr = getNewSizeUintArray(prevArr, appendSize, durationInfo.info)
+      const newArr = getReplaceSize(prevArr, duration.length, durationInfo.info)
       newArr.forEach(v => {
         resUint8Array[resIndex] = v
         resIndex++
@@ -105,7 +89,7 @@ export const insertDuration = async (blob: Blob, durationInfo: DurationInfo) => 
     if (i > durationInfo.info.sizeStart && i < durationInfo.info.sizeEnd) continue
     // Duration は TimecodeScale の後ろに挿入
     if (i === durationInfo.timeCodeScale.dataEnd) {
-      [...durationTag, ...durationSize, ...durationValue].forEach(v => {
+      duration.getNumberArray().forEach(v => {
         resUint8Array[resIndex] = v
         resIndex++
       })
@@ -116,25 +100,133 @@ export const insertDuration = async (blob: Blob, durationInfo: DurationInfo) => 
   return resUint8Array
 }
 
-const getNewSizeUintArray = (prevArr: Uint8Array, appendSize: number, ele: EBMLElementDetailWithIsEnd) => {
-  // TODO: 桁上がり
+class EBMLTag {
+  tag: Uint8Array;
+  size: Uint8Array
+  data: EBMLTag[] | Uint8Array
+  length: number
+  constructor (tag: Uint8Array, size: Uint8Array, data: EBMLTag[] | Uint8Array) {
+    this.tag = tag
+    this.size = size
+    this.data = data
+    if (Array.isArray(data)) {
+      this.length = tag.length + size.length + data.map(v => v.length).reduce((acc, cur) => acc + cur)
+    } else {
+      this.length = tag.length + size.length + data.length
+    }
+  }
+  getNumberArray(): number[] {
+    if (Array.isArray(this.data)) {
+      return [...this.tag, ...this.size, ...this.data.map(v => v.getNumberArray()).reduce((acc, cur) => [...acc, ...cur])]
+    } else {
+      return [...this.tag, ...this.size, ...this.data]
+    }
+  }
+}
+
+interface CuePointData {
+  cueTime: number
+  cueTrack: number
+  cueClusterPosition: number
+  cueBlockNumber: number
+}
+
+const getInsertCues = (data: EBMLElementDetailWithIsEnd[], seekSize: number) => {
+  const cuePointDatas = getCuesData(data)
+  const isLittleEndian = checkLittleEndian()
+
+  const cuePoints: EBMLTag[] = []
+  console.log(cuePointDatas)
+  for (const cuePointData of cuePointDatas) {
+    const cueTrack = getEBMLTagByUintValue([0xF7], cuePointData.cueTrack, isLittleEndian)
+    const cueClusterPosition = getEBMLTagByUintValue([0xF1], cuePointData.cueClusterPosition + seekSize, isLittleEndian)
+    const cueBlockNumber = getEBMLTagByUintValue([0x53, 0x78], cuePointData.cueBlockNumber, isLittleEndian)
+
+    const cueTrackPositions = getEBMLTagByEBMLTags([0xB7], [cueTrack, cueClusterPosition, cueBlockNumber])
+    const cueTime = getEBMLTagByUintValue([0xB3], cuePointData.cueTime, isLittleEndian)
+
+    const cuePoint = getEBMLTagByEBMLTags([0xBB], [cueTime, cueTrackPositions])
+    cuePoints.push(cuePoint)
+    break
+  }
+
+  const cues = getEBMLTagByEBMLTags([0x1C, 0x53, 0xBB, 0x6B], cuePoints)
+  return cues
+}
+
+const getReplaceSize = (prevArr: Uint8Array, appendSize: number, ele: EBMLElementDetailWithIsEnd) => {
   let prevSize = ''
   for (let sizeIndex = ele.sizeStart; sizeIndex < ele.sizeEnd; sizeIndex++) {
     prevSize += prevArr[sizeIndex].toString(2).padStart(8, '0')
   }
   const newSize = parseInt(prevSize, 2) + appendSize
+  const size = getSize(newSize)
+  return size
+}
 
-  const len = ele.sizeEnd - ele.sizeStart
-  const res = new Uint8Array(len)
-  const newSizeStr = newSize.toString(2)
-  for (let i = 0; i < len; i++) {
-    let ele = ''
-    if (i !== 0) {
-      ele = newSizeStr.slice(-8 * (i + 1), len + -8 * i)
-    } else {
-      ele = newSizeStr.slice(-8 * (i + 1))
-    }
-    res[len - i - 1] = parseInt(ele !== '' ? ele : '0', 2)
+const getSize = (dataLength: number) => {
+  const sizeLength = checkByteOrder(dataLength, true)
+  const sizeBase = (Array(sizeLength - 1).fill('0').join('') + '1').padEnd(8 * sizeLength, '0')
+  const sizeStr = (parseInt(sizeBase, 2) + dataLength).toString(2).padStart(8 * sizeLength, '0')
+  const size = new Uint8Array(sizeLength)
+  for (let i = 0; i < sizeLength; i++) {
+    size[i] = parseInt(sizeStr.slice(8 * i, 8 * (i + 1)), 2)
   }
-  return res
+  return size
+}
+
+const getCuesData = (data: EBMLElementDetailWithIsEnd[]) => {
+  const timeCodeScaleValue: number = data.find(v => v.name === 'TimecodeScale')?.value
+
+  let time = 0
+  let baseTimecode = 0
+  let blockNumber = 0
+  let clusterPosition = 0
+  const cuePointDatas: CuePointData[] = []
+  for (const tag of data) {
+    if (tag.name == 'Cluster') {
+      blockNumber = 0
+      clusterPosition = tag.tagStart
+    }
+    if (tag.name === 'Timecode') {
+      baseTimecode = tag.value ?? 0
+    }
+    if (tag.name === 'SimpleBlock') {
+      blockNumber++
+
+      const block: SimpleBlock = ebmlBlock(tag.data)
+      const t = baseTimecode + block.timecode
+      const sec = getSecFromNanoSec(t * timeCodeScaleValue)
+      if (Math.floor(time) < Math.floor(sec)) {
+        cuePointDatas.push({
+          cueTime: t,
+          cueTrack: block.trackNumber,
+          cueClusterPosition: clusterPosition,
+          cueBlockNumber: blockNumber
+        })
+      }
+      time = sec
+    }
+  }
+  return cuePointDatas
+}
+
+const getEBMLTagByUintValue = (tag: number[], data: number, isLittleEndian: boolean) => {
+  const ebmlTag = new Uint8Array(tag)
+  const ebmlValue = getUintArrayByNumber(data, isLittleEndian)
+  const ebmlSize = getSize(ebmlValue.length)
+  return new EBMLTag(ebmlTag, ebmlSize, ebmlValue)
+}
+
+const getEBMLTagByFloatValue = (tag: number[], data: number, isLittleEndian: boolean) => {
+  const ebmlTag = new Uint8Array(tag)
+  const ebmlValue = getFloatArrayByNumber(data, isLittleEndian)
+  const ebmlSize = getSize(ebmlValue.length)
+  return new EBMLTag(ebmlTag, ebmlSize, ebmlValue)
+}
+
+const getEBMLTagByEBMLTags = (tag: number[], data: EBMLTag[]) => {
+  const ebmlTag = new Uint8Array([0xB7])
+  const ebmlSize = getSize(data.map(v => v.length).reduce((acc, cur) => acc + cur))
+  return new EBMLTag(ebmlTag, ebmlSize, data)
 }

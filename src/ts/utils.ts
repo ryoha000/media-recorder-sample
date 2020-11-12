@@ -51,8 +51,22 @@ export const setMessage = (text: string) => {
   (element as HTMLInputElement).value = text
 }
 
-export const isLittleEndian = () => {
+export const checkLittleEndian = () => {
   const arr = new Uint16Array([0x1122])
   const checkArr = new Uint8Array(arr.buffer)
   return checkArr[0] === 0x22
+}
+
+export const checkByteOrder = (byteLen: number, unsigned: boolean) => {
+  const pow = unsigned ? 7 : 6
+  for (let i = 1; i < 9; i++) {
+    if (byteLen < Math.pow(10, i * pow)) {
+      return i
+    }
+  }
+  throw 'size length over 9'
+}
+
+export const getSecFromNanoSec = (t: number) => {
+  return t / Math.pow(10, 9)
 }
