@@ -1,7 +1,8 @@
 import * as ebml from 'ts-ebml';
 import { playVideoByBlob, setMessage } from './utils'
 import { ConfirmVideoID } from './const'
-import { getDisplayEBML, getDuration, insertDuration, insertSheekAndCue } from './ebml'
+import { getDisplayEBML, insertSheekAndCue } from './ebml/ebml'
+import { insertDuration } from './ebml/duration'
 import { EBMLElementDetailWithIsEnd } from '../@types/EBML';
 
 const useRecord = () => {
@@ -43,18 +44,16 @@ const useRecord = () => {
   const playWebMWithDuration = async () => {
     const videloBlob = new Blob(getNewChunks(), { type: 'webm' })
     const data = await getEBML(videloBlob)
-    const duration = getDuration(data)
-    const resUintArray = await insertDuration(videloBlob, duration)
+    const resUintArray = await insertDuration(videloBlob, data)
     playVideoByBlob(ConfirmVideoID, new Blob([resUintArray], { type: 'webm' }));
   }
   const playWebMWithSheekAndCue = async () => {
     const videloBlob = new Blob(getNewChunks(), { type: 'webm' })
     const initialEBML = await getEBML(videloBlob)
 
-    const duration = getDuration(initialEBML)
-    const arrInsertedDuration = await insertDuration(videloBlob, duration)
-
+    const arrInsertedDuration = await insertDuration(videloBlob, initialEBML)
     const insertedDurationEBML = await getEBML(new Blob([arrInsertedDuration], { type: 'webm' }))
+
     const result = insertSheekAndCue(arrInsertedDuration, insertedDurationEBML)
     console.log(await getEBML(new Blob([result], { type: 'webm' })))
     playVideoByBlob(ConfirmVideoID, new Blob([result], { type: 'webm' }));

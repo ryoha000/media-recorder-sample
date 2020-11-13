@@ -32,3 +32,5 @@ export const getFloatArrayByNumber = (float: number, isLittleEndian: boolean) =>
   }
   return res
 }
+
+console.log([...getUintArrayByNumber(0x1549a966, true)].map(v => v.toString(16).toUpperCase()).join(''))
