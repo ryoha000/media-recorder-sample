@@ -131,15 +131,79 @@ interface CuePointData {
   cueBlockNumber: number
 }
 
-const getInsertCues = (data: EBMLElementDetailWithIsEnd[], seekSize: number) => {
-  const cuePointDatas = getCuesData(data)
+interface ClusterSizeData {
+  cluster: EBMLElementDetailWithIsEnd
+  clusterSize: Uint8Array
+  clusterDiff: number
+}
+
+export const insertSheekAndCue = (prevArr: Uint8Array, data: EBMLElementDetailWithIsEnd[]) => {
+  const clusters = data.filter(v => v.name === 'Cluster')
+  const segment = data.find(v => v.name === 'Segment')
+  if (!segment) {
+    throw 'invalid EBML'
+  }
+  const seekSize = 0
+  // TODO: seekheadを入れる
+  let diffSize = seekSize
+  const { datas: clusterSizeDatas, diff } = getClusterSizeDatas(data)
+  diffSize += diff
+  const cues = getInsertCues(data, seekSize, clusterSizeDatas)
+  diffSize += cues.length
+  const segmentSize = getSize(data[data.length - 1].dataEnd - segment.dataStart + seekSize)
+  diffSize += segmentSize.length - 8
+
+  const resUint8Array = new Uint8Array(prevArr.length + diffSize)
+  let resIndex = 0
+  for (let i = 0; i < prevArr.length; i ++) {
+    const clusterIndex = clusters.findIndex(v => v.sizeStart === i)
+    if (clusterIndex > -1) {
+      clusterSizeDatas[clusterIndex].clusterSize.forEach(v => {
+        resUint8Array[resIndex] = v
+        resIndex++
+      })
+      continue
+    }
+    if (clusters.findIndex(v => v.sizeStart < i && i < v.sizeEnd) > -1) continue
+    if (i === segment.sizeStart) {
+      segmentSize.forEach(v => {
+        resUint8Array[resIndex] = v
+        resIndex++
+      })
+      continue
+    }
+    if (i > segment.sizeStart && i < segment.sizeEnd) continue
+    if (i === data.find(v => v.name === 'Tracks' && v.isEnd)?.dataEnd) {
+      
+      cues.getNumberArray().forEach(v => {
+        resUint8Array[resIndex] = v
+        resIndex++
+      })
+    }
+    resUint8Array[resIndex] = prevArr[i]
+    resIndex++
+  }
+  return resUint8Array
+}
+
+const getInsertCues = (data: EBMLElementDetailWithIsEnd[], seekSize: number, clusterSizeDatas: ClusterSizeData[]) => {
+  let diffSize = seekSize
+  let cues = getCues(data, diffSize, clusterSizeDatas)
+  while (diffSize !== seekSize + cues.length) {
+    diffSize = seekSize + cues.length
+    cues = getCues(data, diffSize, clusterSizeDatas)
+  }
+  return cues
+}
+
+const getCues = (data: EBMLElementDetailWithIsEnd[], diffSize: number, clusterSizeDatas: ClusterSizeData[]) => {
+  const cuePointDatas = getCuesData(data, clusterSizeDatas)
   const isLittleEndian = checkLittleEndian()
 
   const cuePoints: EBMLTag[] = []
-  console.log(cuePointDatas)
   for (const cuePointData of cuePointDatas) {
     const cueTrack = getEBMLTagByUintValue([0xF7], cuePointData.cueTrack, isLittleEndian)
-    const cueClusterPosition = getEBMLTagByUintValue([0xF1], cuePointData.cueClusterPosition + seekSize, isLittleEndian)
+    const cueClusterPosition = getEBMLTagByUintValue([0xF1], cuePointData.cueClusterPosition + diffSize, isLittleEndian)
     const cueBlockNumber = getEBMLTagByUintValue([0x53, 0x78], cuePointData.cueBlockNumber, isLittleEndian)
 
     const cueTrackPositions = getEBMLTagByEBMLTags([0xB7], [cueTrack, cueClusterPosition, cueBlockNumber])
@@ -147,11 +211,30 @@ const getInsertCues = (data: EBMLElementDetailWithIsEnd[], seekSize: number) => 
 
     const cuePoint = getEBMLTagByEBMLTags([0xBB], [cueTime, cueTrackPositions])
     cuePoints.push(cuePoint)
-    break
   }
 
   const cues = getEBMLTagByEBMLTags([0x1C, 0x53, 0xBB, 0x6B], cuePoints)
   return cues
+}
+
+const getClusterSizeDatas = (data: EBMLElementDetailWithIsEnd[]): {
+  datas: ClusterSizeData[],
+  diff: number
+} => {
+  let diff = 0
+  return {
+    datas: data.filter(v => v.name === 'Cluster').map((v, i, arr) => {
+      let clusterSize: Uint8Array
+      if (i === arr.length - 1) {
+        clusterSize =  getSize(data[data.length - 1].dataEnd - v.dataStart)
+      } else {
+        clusterSize = getSize(arr[i + 1].tagStart - v.dataStart)
+      }
+      diff += clusterSize.length - 8
+      return { cluster: v, clusterSize, clusterDiff: diff }
+    }),
+    diff
+  }
 }
 
 const getReplaceSize = (prevArr: Uint8Array, appendSize: number, ele: EBMLElementDetailWithIsEnd) => {
@@ -159,7 +242,7 @@ const getReplaceSize = (prevArr: Uint8Array, appendSize: number, ele: EBMLElemen
   for (let sizeIndex = ele.sizeStart; sizeIndex < ele.sizeEnd; sizeIndex++) {
     prevSize += prevArr[sizeIndex].toString(2).padStart(8, '0')
   }
-  const newSize = parseInt(prevSize, 2) + appendSize
+  const newSize = parseInt(prevSize.replace('1', '0'), 2) + appendSize
   const size = getSize(newSize)
   return size
 }
@@ -175,7 +258,7 @@ const getSize = (dataLength: number) => {
   return size
 }
 
-const getCuesData = (data: EBMLElementDetailWithIsEnd[]) => {
+const getCuesData = (data: EBMLElementDetailWithIsEnd[], clusterSizeDatas: ClusterSizeData[]) => {
   const timeCodeScaleValue: number = data.find(v => v.name === 'TimecodeScale')?.value
 
   let time = 0
@@ -186,7 +269,9 @@ const getCuesData = (data: EBMLElementDetailWithIsEnd[]) => {
   for (const tag of data) {
     if (tag.name == 'Cluster') {
       blockNumber = 0
-      clusterPosition = tag.tagStart
+      const targetCluster = clusterSizeDatas.find(v => v.cluster.tagStart === tag.tagStart)
+      if (!targetCluster) throw 'unhandled error: getClusterSizeDatas is bad in getCuesData'
+      clusterPosition = tag.tagStart + targetCluster.clusterDiff
     }
     if (tag.name === 'Timecode') {
       baseTimecode = tag.value ?? 0
@@ -226,7 +311,7 @@ const getEBMLTagByFloatValue = (tag: number[], data: number, isLittleEndian: boo
 }
 
 const getEBMLTagByEBMLTags = (tag: number[], data: EBMLTag[]) => {
-  const ebmlTag = new Uint8Array([0xB7])
+  const ebmlTag = new Uint8Array(tag)
   const ebmlSize = getSize(data.map(v => v.length).reduce((acc, cur) => acc + cur))
   return new EBMLTag(ebmlTag, ebmlSize, data)
 }

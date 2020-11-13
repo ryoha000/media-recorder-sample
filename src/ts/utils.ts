@@ -60,7 +60,7 @@ export const checkLittleEndian = () => {
 export const checkByteOrder = (byteLen: number, unsigned: boolean) => {
   const pow = unsigned ? 7 : 6
   for (let i = 1; i < 9; i++) {
-    if (byteLen < Math.pow(10, i * pow)) {
+    if (byteLen < Math.pow(2, i * pow)) {
       return i
     }
   }
