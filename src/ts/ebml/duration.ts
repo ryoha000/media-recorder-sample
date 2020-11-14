@@ -1,5 +1,5 @@
-import { DurationInfo, EBMLElementDetailWithIsEnd } from './types'
-import { getEBMLTagByFloatValue, getReplaceSize } from './ebml'
+import { DurationInfo, EBMLElementDetailWithIsEnd, SpliceEBMLData } from './types'
+import { getEBMLTagByFloatValue, getReplaceSize, spliceEBML } from './ebml'
 import { checkLittleEndian } from '../utils'
 // @ts-ignore
 import ebmlBlock from 'ebml-block'
@@ -40,28 +40,12 @@ export const insertDuration = async (blob: Blob, data: EBMLElementDetailWithIsEn
   const durationInfo = getDuration(data)
 
   const duration = getEBMLTagByFloatValue([0x44, 0x89], durationInfo.duration, checkLittleEndian())
-
-  const resUint8Array = new Uint8Array(prevArr.length + duration.length)
-  let resIndex = 0
-  for (let i = 0; i < prevArr.length; i ++) {
-    if (i === durationInfo.info.sizeStart) {
-      const newArr = getReplaceSize(prevArr, duration.length, durationInfo.info)
-      newArr.forEach(v => {
-        resUint8Array[resIndex] = v
-        resIndex++
-      })
-      continue
-    }
-    if (i > durationInfo.info.sizeStart && i < durationInfo.info.sizeEnd) continue
-    // Duration は TimecodeScale の後ろに挿入
-    if (i === durationInfo.timeCodeScale.dataEnd) {
-      duration.getNumberArray().forEach(v => {
-        resUint8Array[resIndex] = v
-        resIndex++
-      })
-    }
-    resUint8Array[resIndex] = prevArr[i]
-    resIndex++
-  }
-  return resUint8Array
+  const spliceData: SpliceEBMLData[] = []
+  spliceData.push({
+    start: durationInfo.info.sizeStart,
+    deleteCount: durationInfo.info.sizeEnd - durationInfo.info.sizeEnd,
+    item: getReplaceSize(prevArr, duration.length, durationInfo.info)
+  })
+  spliceData.push({ start: durationInfo.timeCodeScale.dataEnd, deleteCount: 0, item: duration.getNumberArray() })
+  return await spliceEBML(prevArr, spliceData)
 }

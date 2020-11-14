@@ -28,7 +28,6 @@ export class EBMLTag {
   getNumberArray(): number[] {
     if (Array.isArray(this.data)) {
       if (this.data.length === 0) {
-        console.log(this.size)
         return [...this.tag, ...this.size]
       } else {
         return [...this.tag, ...this.size, ...this.data.map(v => v.getNumberArray()).reduce((acc, cur) => [...acc, ...cur])]

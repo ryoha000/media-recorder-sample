@@ -5,7 +5,7 @@
   "scripts": {
     "type-check": "tsc --noEmit",
     "start": "npx parcel src/index.html -d public",
-    "build": "npx parcel build src/index.html -d build"
+    "build": "npx parcel build src/index.html"
   },
   "author": "ryoha000",
   "license": "ISC",

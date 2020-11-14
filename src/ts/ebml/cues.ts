@@ -79,7 +79,7 @@ const getCuesData = (data: EBMLElementDetailWithIsEnd[]) => {
       const block: SimpleBlock = ebmlBlock(tag.data)
       const t = baseTimecode + block.timecode
       const sec = getSecFromNanoSec(t * timeCodeScaleValue)
-      if (Math.floor(time) + 3 < Math.floor(sec)) {
+      if (Math.floor(time) + 1 < Math.floor(sec)) {
         time = sec
         cuePointDatas.push({
           cueTime: t,

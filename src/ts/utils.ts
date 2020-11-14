@@ -22,6 +22,15 @@ export const playVideoByBlob = (id: string, blob: Blob) => {
   (element as HTMLMediaElement).src = window.URL.createObjectURL(blob)
 }
 
+export const playVideoByURL = (id: string, url: string) => {
+  const element = document.getElementById(id)
+  if (!element) {
+    console.error(`${id} element not found`)
+    return
+  }
+  (element as HTMLMediaElement).src = url
+}
+
 export const download = (blob: Blob) => {
   const blobURL = window.URL.createObjectURL(blob)
   const anchor = document.createElement('a')
