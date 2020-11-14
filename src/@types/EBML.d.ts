@@ -1,13 +1,7 @@
-import { EBMLElementDetail } from 'ts-ebml'
-
-declare type EBMLElementDetailWithIsEnd = EBMLElementDetail & {
-  isEnd?: boolean
-  value?: number | string
-  data?: Uint8Array
-}
+import { SimpleBlock } from "ts-ebml";
 
 declare module 'ebml-block' {
-  export default class EBMLBlock {
-    
+  export default function EBMLBlock(data: Uint8Array): SimpleBlock {
+    return
   }
 }

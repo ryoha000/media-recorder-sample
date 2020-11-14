@@ -1,44 +1,24 @@
-import { EBMLElementDetailWithIsEnd, CuePointData, EBMLTag } from './types'
-import { getEBMLTagByEBMLTags, getEBMLTagByUintValue, getSize } from './ebml'
+import { EBMLElementDetailWithIsEnd, CuePointData, EBMLTag, SpliceEBMLData } from './types'
+import { getEBMLTagByEBMLTags, getEBMLTagByUintValue, getSize, spliceEBML } from './ebml'
 import { checkLittleEndian, getSecFromNanoSec } from '../utils'
 // @ts-ignore
 import ebmlBlock from 'ebml-block'
 import { SimpleBlock } from 'ts-ebml'
 
-export const insertCues = (prevArr: Uint8Array, data: EBMLElementDetailWithIsEnd[]) => {
-  return new Promise<Uint8Array>((resolve, reject) => {
-    console.log('run insertCues')
-    const start = performance.now()
-    const cues = getInsertCues(data)
-  
-    const segment = data.find(v => v.name === 'Segment')
-    if (!segment) throw 'invalid EBML'
-    // 桁上がりは考えない
-    const segmentSize = getSize(data[data.length - 1].dataEnd - segment.dataStart + cues.length)
-  
-    const result = new Uint8Array(prevArr.length + cues.length)
-    console.log(`start insert cues: ${(performance.now() - start) / 1000}s`)
-    let resIndex = 0
-    for (let prevArrIndex = 0; prevArrIndex < prevArr.length; prevArrIndex ++) {
-      if (prevArrIndex === segment.sizeStart) {
-        segmentSize.forEach(v => {
-          result[resIndex] = v
-          resIndex++
-        })
-        continue
-      }
-      if (prevArrIndex > segment.sizeStart && prevArrIndex < segment.sizeEnd) continue
-      if (prevArrIndex === data.find(v => v.name === 'Tracks' && v.isEnd)?.dataEnd) {
-        cues.getNumberArray().forEach(v => {
-          result[resIndex] = v
-          resIndex++
-        })
-      }
-      result[resIndex] = prevArr[prevArrIndex]
-      resIndex++
-    }
-    resolve(result)
-  })
+export const insertCues = async (prevArr: Uint8Array, data: EBMLElementDetailWithIsEnd[]) => {
+  console.log('run insertCues')
+  const start = performance.now()
+  const cues = getInsertCues(data)
+
+  const segment = data.find(v => v.name === 'Segment')
+  const tracks = data.find(v => v.name === 'Tracks' && v.isEnd)
+  if (!segment || !tracks) throw 'invalid EBML'
+  // 桁上がりは考えない
+  const segmentSize = getSize(data[data.length - 1].dataEnd - segment.dataStart + cues.length)
+  const spliceDatas: SpliceEBMLData[] = []
+  spliceDatas.push({ start: segment.sizeStart, deleteCount: segment.sizeEnd - segment.sizeStart, item: segmentSize })
+  spliceDatas.push({ start: tracks.dataEnd, deleteCount: 0, item: cues.getNumberArray() })
+  return await spliceEBML(prevArr, spliceDatas)
 }
 
 export const getInsertCues = (data: EBMLElementDetailWithIsEnd[]) => {

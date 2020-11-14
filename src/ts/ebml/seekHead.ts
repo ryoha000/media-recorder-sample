@@ -1,62 +1,33 @@
-import { EBMLElementDetailWithIsEnd, SeekData, EBMLTag } from './types'
-import { getEBMLTagByEBMLTags, getEBMLTagByUintValue, getSize } from './ebml'
+import { EBMLElementDetailWithIsEnd, SeekData, EBMLTag, SpliceEBMLData } from './types'
+import { getEBMLTagByEBMLTags, getEBMLTagByUintValue, getSize, spliceEBML } from './ebml'
 import { checkLittleEndian } from '../utils'
 import { getUintArrayByNumber } from '../typeArrayUtils'
 
-export const insertSeekHead = (prevArr: Uint8Array, data: EBMLElementDetailWithIsEnd[]) => {
-  return new Promise<Uint8Array>((resolve) => {
-    console.log('run insertSeekHead')
-    const start = performance.now()
-    const seekHead = getInsertSeekHead(data)
-  
-    const segment = data.find(v => v.name === 'Segment')
-    if (!segment) throw 'invalid EBML'
-    // 桁上がりは考えない
-    const segmentSize = getSize(data[data.length - 1].dataEnd - segment.dataStart + seekHead.length)
-    const cues = data.filter(v => v.name === 'CueClusterPosition')
-  
-    const result = new Uint8Array(prevArr.length + seekHead.length)
-    console.log(`start insert seek: ${(performance.now() - start) / 1000}s`)
-    let resIndex = 0
-    for (let prevArrIndex = 0; prevArrIndex < prevArr.length; prevArrIndex ++) {
-      if (prevArrIndex === segment.sizeStart) {
-        segmentSize.forEach(v => {
-          result[resIndex] = v
-          resIndex++
-        })
-        continue
-      }
-      if (prevArrIndex > segment.sizeStart && prevArrIndex < segment.sizeEnd) continue
-      if (prevArrIndex === data.find(v => v.name === 'Info' && !v.isEnd)?.tagStart) {
-        seekHead.getNumberArray().forEach(v => {
-          result[resIndex] = v
-          resIndex++
-        })
-      }
-      const cueDataStartIndex = cues.findIndex(v => v.dataStart === prevArrIndex)
-      if (cueDataStartIndex > -1) {
-        const prevValue = cues[cueDataStartIndex].value
-        const newVal = getUintArrayByNumber(prevValue + seekHead.length, checkLittleEndian())
-        if (cues[cueDataStartIndex].data.length !== newVal.length) {
-          console.error('change size', cues[cueDataStartIndex], prevValue, seekHead.length, newVal);
-          (cues[cueDataStartIndex].data as Uint8Array).forEach(v => {
-            result[resIndex] = v
-            resIndex++
-          })
-          continue
-        }
-        newVal.forEach(v => {
-          result[resIndex] = v
-          resIndex++
-        })
-        continue
-      }
-      if (cues.findIndex(v => v.dataStart < prevArrIndex && prevArrIndex < v.dataEnd) > -1) continue
-      result[resIndex] = prevArr[prevArrIndex]
-      resIndex++
+export const insertSeekHead = async (prevArr: Uint8Array, data: EBMLElementDetailWithIsEnd[]) => {
+  console.log('run insertSeekHead')
+  const seekHead = getInsertSeekHead(data)
+
+  const segment = data.find(v => v.name === 'Segment')
+  const info = data.find(v => v.name === 'Info')
+  if (!segment || !info) throw 'invalid EBML'
+  // 桁上がりは考えない
+  const segmentSize = getSize(data[data.length - 1].dataEnd - segment.dataStart + seekHead.length)
+  const cues = data.filter(v => v.name === 'CueClusterPosition')
+
+  const spliceDatas: SpliceEBMLData[] = []
+  spliceDatas.push({ start: segment.sizeStart, deleteCount: segment.sizeEnd - segment.sizeStart, item: segmentSize })
+  spliceDatas.push({ start: info.tagStart, deleteCount: 0, item: seekHead.getNumberArray() })
+  cues.map(v => {
+    const prevValue = v.value
+    const newVal = getUintArrayByNumber(prevValue + seekHead.length, checkLittleEndian())
+    if (v.data.length !== newVal.length) {
+      console.error('change size', v, prevValue, seekHead.length, newVal);
+      return { start: v.dataStart, deleteCount: 0, item: [] }
     }
-    resolve(result)
-  })
+    return { start: v.dataStart, deleteCount: v.dataSize, item: newVal }
+  }).forEach(v => spliceDatas.push(v))
+
+  return await spliceEBML(prevArr, spliceDatas)
 }
 
 const getInsertSeekHead = (data: EBMLElementDetailWithIsEnd[]) => {

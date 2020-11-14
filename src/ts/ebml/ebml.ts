@@ -1,4 +1,4 @@
-import { EBMLElementDetailWithIsEnd, EBMLTag } from './types';
+import { EBMLElementDetailWithIsEnd, EBMLTag, SpliceEBMLData } from './types';
 import { checkByteOrder, checkLittleEndian } from '../utils'
 import { getFloatArrayByNumber, getUintArrayByNumber } from '../typeArrayUtils';
 import { Decoder } from 'ts-ebml'
@@ -7,6 +7,45 @@ export const getEBML = async (blob: Blob) => {
   const decoder = new Decoder();
   const buf = await blob.arrayBuffer()
   return (decoder.decode(buf) as EBMLElementDetailWithIsEnd[]);
+}
+
+export const spliceEBML = (prevArr: Uint8Array, datas: SpliceEBMLData[]) => {
+  return new Promise<Uint8Array>((resolve) => {
+    const diff = getStartDiff(0, datas)
+    let newArr =  new Uint8Array(prevArr.length + diff)
+    let start = 0
+    // dataはstartでsortされてる前提
+    for (const spliceData of datas) {
+      const startDiff = getStartDiff(spliceData.start, datas)
+      for (let i = start; i < spliceData.start; i++) {
+        newArr[i + startDiff] = prevArr[i]
+      }
+      [...spliceData.item].forEach((v, i) => {
+        newArr[spliceData.start + startDiff + i] = v
+      })
+      start = spliceData.start + spliceData.deleteCount
+    }
+    for (let i = start; i < prevArr.length; i++) {
+      newArr[i + diff] = prevArr[i]
+    }
+    resolve(newArr)
+  })
+}
+
+const getStartDiff = (sizeStart: number, datas: SpliceEBMLData[]) => {
+  // sizeStartでsortされてる前提
+  const index = datas.findIndex(v => v.start === sizeStart)
+  let diff = 0
+  if (index === -1) {
+    for (let i = 0; i < datas.length; i++) {
+      diff += datas[i].item.length - datas[i].deleteCount
+    }
+    return diff
+  }
+  for (let i = 0; i < index; i++) {
+    diff += datas[i].item.length - datas[i].deleteCount
+  }
+  return diff
 }
 
 export const getReplaceSize = (prevArr: Uint8Array, appendSize: number, ele: EBMLElementDetailWithIsEnd) => {

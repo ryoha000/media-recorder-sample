@@ -62,6 +62,11 @@ export interface SeekData {
   position: number
 }
 
+export interface SpliceEBMLData {
+  start: number
+  deleteCount: number
+  item: Uint8Array | number[]
+}
 
 export declare type EBMLElementDetailWithIsEnd = EBMLElementDetail & {
   isEnd?: boolean
