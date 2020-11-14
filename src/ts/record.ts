@@ -1,9 +1,10 @@
-import * as ebml from 'ts-ebml';
-import { playVideoByBlob, setMessage } from './utils'
+import { playVideoByBlob, setMessage, download } from './utils'
 import { ConfirmVideoID } from './const'
-import { getDisplayEBML, insertSheekAndCue } from './ebml/ebml'
+import { getDisplayEBML, getEBML } from './ebml/ebml'
 import { insertDuration } from './ebml/duration'
-import { EBMLElementDetailWithIsEnd } from '../@types/EBML';
+import { fixDataSize } from './ebml/indefiniteLength'
+import { insertCues } from './ebml/cues'
+import { insertSeekHead } from './ebml/seekHead'
 
 const useRecord = () => {
   const chunks: Blob[] = []
@@ -31,14 +32,10 @@ const useRecord = () => {
     playVideoByBlob(ConfirmVideoID, videloBlob);
     (document.getElementById(ConfirmVideoID) as HTMLVideoElement).currentTime = Infinity
   }
-  const getEBML = async (blob: Blob) => {
-    const decoder = new ebml.Decoder();
-    const buf = await blob.arrayBuffer()
-    return (decoder.decode(buf) as EBMLElementDetailWithIsEnd[]);
-  }
   const displayEBML = async () => {
     const videloBlob = new Blob(getNewChunks(), { type: 'webm' })
     const data = await getEBML(videloBlob)
+    console.log(data)
     setMessage(getDisplayEBML(data))
   }
   const playWebMWithDuration = async () => {
@@ -48,15 +45,45 @@ const useRecord = () => {
     playVideoByBlob(ConfirmVideoID, new Blob([resUintArray], { type: 'webm' }));
   }
   const playWebMWithSheekAndCue = async () => {
+    let start = performance.now()
     const videloBlob = new Blob(getNewChunks(), { type: 'webm' })
     const initialEBML = await getEBML(videloBlob)
+    console.log(`get initialEBML: ${(performance.now() - start) / 1000}s`)
+    start = performance.now()
 
     const arrInsertedDuration = await insertDuration(videloBlob, initialEBML)
-    const insertedDurationEBML = await getEBML(new Blob([arrInsertedDuration], { type: 'webm' }))
+    console.log(`get arrInsertedDuration: ${(performance.now() - start) / 1000}s`)
+    start = performance.now()
+    const insertedDurationBlob = new Blob([arrInsertedDuration], { type: 'webm' })
+    const insertedDurationEBML = await getEBML(insertedDurationBlob)
+    console.log(`get insertedDurationEBML: ${(performance.now() - start) / 1000}s`)
+    download(insertedDurationBlob)
+    start = performance.now()
 
-    const result = insertSheekAndCue(arrInsertedDuration, insertedDurationEBML)
-    console.log(await getEBML(new Blob([result], { type: 'webm' })))
-    playVideoByBlob(ConfirmVideoID, new Blob([result], { type: 'webm' }));
+    const arrFixDataSize = await fixDataSize(arrInsertedDuration, insertedDurationEBML)
+    console.log(`get arrFixDataSize: ${(performance.now() - start) / 1000}s`)
+    start = performance.now()
+    const fixDataSizeEBML = await getEBML(new Blob([arrFixDataSize], { type: 'webm' }))
+    console.log(`get fixDataSizeEBML: ${(performance.now() - start) / 1000}s`)
+    start = performance.now()
+
+    const arrInstertedCues = await insertCues(arrFixDataSize, fixDataSizeEBML)
+    console.log(`get arrInstertedCues: ${(performance.now() - start) / 1000}s`)
+    start = performance.now()
+    const insertedCuesEBML = await getEBML(new Blob([arrInstertedCues], { type: 'webm' }))
+    console.log(`get insertedCuesEBML: ${(performance.now() - start) / 1000}s`)
+    start = performance.now()
+
+    const arrInstertedSeekHead = await insertSeekHead(arrInstertedCues, insertedCuesEBML)
+    console.log(`get arrInstertedSeekHead: ${(performance.now() - start) / 1000}s`)
+    start = performance.now()
+    const resultBlob = new Blob([arrInstertedSeekHead], { type: 'webm' })
+    const insertedSeekHeadEBML = await getEBML(resultBlob)
+    download(resultBlob)
+    console.log(`get insertedSeekHeadEBML: ${(performance.now() - start) / 1000}s`)
+    start = performance.now()
+    console.log(insertedSeekHeadEBML)
+    playVideoByBlob(ConfirmVideoID, resultBlob);
   }
   return { startRecord, playInitialWebM, playWebMWithBigDuration, displayEBML, playWebMWithDuration, playWebMWithSheekAndCue }
 }

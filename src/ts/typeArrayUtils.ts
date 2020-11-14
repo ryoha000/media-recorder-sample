@@ -3,14 +3,16 @@ export const getUintArrayByNumber = (uint: number, isLittleEndian: boolean) => {
   // Uint32に収まらない者は考えない
   if (uint < Math.pow(2, 8)) {
     res = new Uint8Array([uint])
-  }
-  if (uint < Math.pow(2, 16)) {
+  } else if (uint < Math.pow(2, 16)) {
     const uint16 = new Uint16Array([uint])
     res = new Uint8Array(uint16.buffer)
-  }
-  if (uint < Math.pow(2, 32)) {
+  } else if (uint < Math.pow(2, 32)) {
     const uint32 = new Uint32Array([uint])
     res = new Uint8Array(uint32.buffer)
+  } else if (uint < Math.pow(2, 64)) {
+    const uint64 = new BigUint64Array([BigInt(uint)])
+    uint64[0] = 3n
+    res = new Uint8Array(uint64.buffer)
   }
   if (isLittleEndian) {
     res.reverse()
@@ -32,5 +34,3 @@ export const getFloatArrayByNumber = (float: number, isLittleEndian: boolean) =>
   }
   return res
 }
-
-console.log([...getUintArrayByNumber(0x1549a966, true)].map(v => v.toString(16).toUpperCase()).join(''))

@@ -16,14 +16,23 @@ export class EBMLTag {
     this.size = size
     this.data = data
     if (Array.isArray(data)) {
-      this.length = tag.length + size.length + data.map(v => v.length).reduce((acc, cur) => acc + cur)
+      if (data.length === 0) {
+        this.length = tag.length + size.length
+      } else {
+        this.length = tag.length + size.length + data.map(v => v.length).reduce((acc, cur) => acc + cur)
+      }
     } else {
       this.length = tag.length + size.length + data.length
     }
   }
   getNumberArray(): number[] {
     if (Array.isArray(this.data)) {
-      return [...this.tag, ...this.size, ...this.data.map(v => v.getNumberArray()).reduce((acc, cur) => [...acc, ...cur])]
+      if (this.data.length === 0) {
+        console.log(this.size)
+        return [...this.tag, ...this.size]
+      } else {
+        return [...this.tag, ...this.size, ...this.data.map(v => v.getNumberArray()).reduce((acc, cur) => [...acc, ...cur])]
+      }
     } else {
       return [...this.tag, ...this.size, ...this.data]
     }
@@ -35,6 +44,11 @@ export interface CuePointData {
   cueTrack: number
   cueClusterPosition: number
   cueBlockNumber: number
+}
+
+export interface IndefiniteLengthData {
+  sizeStart: number
+  correctSize: Uint8Array
 }
 
 export interface ClusterSizeData {
