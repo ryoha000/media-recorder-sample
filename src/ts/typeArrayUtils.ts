@@ -9,10 +9,6 @@ export const getUintArrayByNumber = (uint: number, isLittleEndian: boolean) => {
   } else if (uint < Math.pow(2, 32)) {
     const uint32 = new Uint32Array([uint])
     res = new Uint8Array(uint32.buffer)
-  } else if (uint < Math.pow(2, 64)) {
-    const uint64 = new BigUint64Array([BigInt(uint)])
-    uint64[0] = 3n
-    res = new Uint8Array(uint64.buffer)
   }
   if (isLittleEndian) {
     res.reverse()
